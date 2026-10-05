@@ -1,0 +1,67 @@
+name: 清理提交署名（去掉 AI 协作者）
+
+# 想清掉仓库页右侧「Contributors（贡献者）」一栏里的 claude，就跑这个。
+# 手动触发：仓库页 → Actions → 左边点「清理提交署名（去掉 AI 协作者）」→ Run workflow。
+# 建议先直接点一次（push 不勾）：它只改写、打印报告，然后自动还原，不推送。
+# 看报告没问题了，再点一次并勾上 push —— 这一步会 git push --force 到 main，提交哈希全部变化。
+#
+# 想改写成哪个名字/邮箱、要不要只动 AI 的提交，都在下面四个输入框里选。
+# 具体做了什么、有什么副作用，见 scripts/clean-credits.sh 开头的说明和 README。
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 改写后的名字
+        type: string
+        default: zhishixuebao2026
+      email:
+        description: 改写后的邮箱（用 GitHub 账号的 noreply 邮箱，贡献者名单才认得出来）
+        type: string
+        default: 336017999+zhishixuebao2026@users.noreply.github.com
+      only_agent:
+        description: 只改 AI 的提交（勾上则你自己原来的提交保持不动）
+        type: boolean
+        default: false
+      push:
+        description: 真正执行并强制推送 main（不勾 = 演练，只打印报告）
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clean-credits
+  cancel-in-progress: false
+
+jobs:
+  clean:
+    name: 改写提交署名
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: 运行 scripts/clean-credits.sh
+        env:
+          IN_NAME: ${{ inputs.name }}
+          IN_EMAIL: ${{ inputs.email }}
+          IN_ONLY: ${{ inputs.only_agent }}
+          IN_PUSH: ${{ inputs.push }}
+        run: |
+          args=(--name "$IN_NAME" --email "$IN_EMAIL")
+          if [ "$IN_ONLY" = "true" ]; then args+=(--only-agent); fi
+          if [ "$IN_PUSH" = "true" ]; then args+=(--push); fi
+          bash scripts/clean-credits.sh "${args[@]}"
+      - name: 提示
+        if: inputs.push
+        run: |
+          {
+            echo "### 已强制推送 main"
+            echo
+            echo "- 贡献者名单会重新计算，通常几分钟，慢的话一天内更新。"
+            echo "- 站点内容没变，不用重新部署也能继续访问；要重跑：Actions → 部署到 GitHub Pages → Run workflow。"
+            echo "- 别人的旧克隆和旧提交链接会失效，需要重新 clone。"
+            echo "- 旧的 Pull Request 页面（refs/pull/*）仍是改不了的旧记录。"
+          } >> "$GITHUB_STEP_SUMMARY"
