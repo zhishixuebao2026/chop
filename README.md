@@ -33,6 +33,7 @@ src/
   assets/tracks/         视频缩略图
   content.config.ts      所有数据的格式定义（写错字段会在构建时报错）
 scripts/fetch-youtube.mjs  从 YouTube 抓取人物图片和视频缩略图
+scripts/clean-credits.sh   改写提交署名（去掉 AI 协作者，见文末）
 ```
 
 ## 风格标签（快 ≠ Chopper）
@@ -90,3 +91,25 @@ scripts/fetch-youtube.mjs  从 YouTube 抓取人物图片和视频缩略图
 - 也可以直接用环境变量：`SITE_URL=https://你的域名 BASE_PATH=/ npm run build`。
 
 详细步骤见 [部署说明.md](./部署说明.md)。
+
+## 去掉提交记录里的 AI 署名（可选）
+
+GitHub 仓库页右侧的「Contributors（贡献者）」一栏是按提交的作者邮箱算的，没有开关能隐藏它。
+想让它消失，只能改写历史，让每个提交都属于同一个邮箱（名单里就只剩你一个人）：
+
+- **网页版**：仓库页 → Actions → **清理提交署名（去掉 AI 协作者）** → Run workflow。
+  先不勾 `push` 跑一次看报告（只改写、打印结果、自动还原，不推送），确认后再勾上 `push` 跑一次。
+- **本地版**：`bash scripts/clean-credits.sh`（演练）/ `bash scripts/clean-credits.sh --push`（真推送）。
+  只把 AI 的提交换成你、自己的提交不动：加 `--only-agent`；换署名：`--name "名字" --email "邮箱"`。
+
+它会：把提交的作者和提交者换成同一个人、删掉 `Co-Authored-By: ...` 里的 AI 署名
+（Claude / Anthropic / arena-agent / Copilot / OpenAI 等，人类协作者不动）、去掉合并信息里的 `claude/...` 分支名。
+
+几点要知道：
+
+- **文件内容一个字节都不改**，但提交哈希全部变化：别人的旧克隆、旧提交链接会失效，要重新 clone。
+- 已经合并过的 Pull Request 页面（`refs/pull/*`）仍是旧记录，GitHub 不让你改；想连那些一起清掉，
+  只能删库重建或把仓库转私有。
+- 改名后 GitHub 要重新算名单：`repos/<owner>/<repo>/contributors` 这个接口通常几分钟就对了，
+  仓库首页右侧那一栏是另一个缓存，可能慢一两天；一直不变的话，可以去 GitHub 社区讨论帖请官方刷一下缓存。
+- 旧提交不会立刻消失，脚本会打印改写前的哈希，推错了还能 `git push --force origin <旧哈希>:main` 回退。
