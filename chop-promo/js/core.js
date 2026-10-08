@@ -104,6 +104,19 @@
     return slices;
   }
 
+  /* ---------- 文字自适应：字体加载完后，超宽的单行文字按比例缩小 ---------- */
+  const fits = [];
+  function fitText(e, max, min = 0.5) { fits.push([e, max, min]); return e; }
+  function runFit() {
+    for (const [e, max, min] of fits) {
+      e.style.fontSize = '';
+      e.style.whiteSpace = 'nowrap';
+      const fs = parseFloat(getComputedStyle(e).fontSize);
+      const w = e.scrollWidth;
+      if (w > max) e.style.fontSize = Math.max(fs * (max / w) * 0.98, fs * min).toFixed(1) + 'px';
+    }
+  }
+
   /* ---------- 图片：统一登记、预加载 ---------- */
   const imgs = new Set();
   function img(src, cls, parent) {
@@ -154,6 +167,7 @@
     tl.fromTo(CAM, { s: 1 + amt }, { s: 1, duration: dur, ease: 'expo.out', immediateRender: false }, t);
   }
   function flash(t, a = 0.85, dur = 0.45) {
+    a = Math.min(a, 0.55) * 0.9; // 闪白封顶：切换有提示，但不刺眼
     tl.fromTo('#flash', { opacity: a }, { opacity: 0, duration: dur, ease: 'power2.out', immediateRender: false }, t);
   }
   function blurWhip(t, amt = 14, dur = 0.35) {
@@ -237,8 +251,6 @@
   const hudBar = document.getElementById('hud-bar');
   const hudNo = document.getElementById('hud-no');
   const hudName = document.getElementById('hud-name');
-  const spsV = document.getElementById('sps-v');
-  const spsFill = document.getElementById('sps-fill');
   const hudBars = [...document.querySelectorAll('.hud-logo .bars i')];
   const lbBars = [...document.querySelectorAll('#letterbox i')];
   const pad = (n, l = 2) => String(n).padStart(l, '0');
@@ -252,9 +264,6 @@
     let ch = chapters[0];
     for (const c of chapters) if (t >= c.t) ch = c;
     if (ch) { hudNo.textContent = pad(ch.no); hudName.textContent = ch.name; }
-    const sps = spsAt(t);
-    spsV.textContent = sps.toFixed(1);
-    spsFill.style.width = Math.min(100, (sps / 25) * 100) + '%';
     const lv = [env('low', t), env('mid', t), env('rms', t), env('mid', t - 0.05), env('high', t)];
     hudBars.forEach((b, i) => (b.style.transform = `scaleY(${0.25 + lv[i] * 0.85})`));
   }
@@ -344,6 +353,18 @@
     const bar = document.getElementById('ui-bar');
     const chapEl = document.getElementById('ui-chapters');
     const fmt = (t) => `${Math.floor(t / 60)}:${pad(Math.floor(t % 60))}`;
+    const chName = document.getElementById('ui-ch');
+    const tip = el('div', null, null, bar);
+    tip.id = 'ui-tip';
+    bar.addEventListener('pointermove', (e) => {
+      const r = bar.getBoundingClientRect();
+      const k = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      const t = k * DURATION;
+      let c = chapters[0];
+      for (const x of chapters) if (t >= x.t) c = x;
+      tip.textContent = `${fmt(t)}  ${c ? c.label : ''}`;
+      tip.style.left = k * 100 + '%';
+    });
     document.getElementById('ui-dur').textContent = fmt(DURATION);
     function buildChapters() {
       chapters.forEach((c) => {
@@ -377,6 +398,9 @@
         fill.style.width = p + '%';
         head.style.left = p + '%';
         time.textContent = fmt(t);
+        let c = chapters[0];
+        for (const x of chapters) if (t >= x.t) c = x;
+        if (c && chName.textContent !== c.label) chName.textContent = c.label;
       },
     };
   })();
@@ -409,7 +433,7 @@
   window.FILM = {
     W, H, A, S, params, BAR, BEAT, BARLEN, T0, DURATION,
     env, hit, spsAt, beatInfo, rand, noise1,
-    el, css, splitChars, splitWords, chopText, img, preloadAll,
+    el, css, splitChars, splitWords, chopText, img, preloadAll, fitText, runFit,
     tl, scene, chapter, chapters, CAM, FXP, punch, flash, blurWhip,
     onFrame, render, play, pause, seek, now, fit, ui, clock,
     get stageScale() { return stageScale; },
