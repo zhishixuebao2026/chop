@@ -1,6 +1,6 @@
 name: 从 xoqnapgf-dot/chop 同步
 
-# 给复制了这个仓库的账号用：定时（或手动点一下）把源仓库的 main 合并进来，再触发部署。
+# 给复制了这个仓库的账号用：定时（或手动点一下）把源仓库的 main 强制对齐过来，再触发部署。
 # 源仓库自己不会运行（见下面的 if）。
 on:
   schedule:
@@ -23,22 +23,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: 合并源仓库的 main
+      - name: 强制对齐源仓库的 main（保留本仓库的同步工作流）
         id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 先备份当前同步工作流，避免被上游覆盖后因权限不足推不出去
+          cp .github/workflows/sync-upstream.yml /tmp/sync-upstream.yml.bak
+
           git fetch https://github.com/xoqnapgf-dot/chop.git main
           before=$(git rev-parse HEAD)
-          git merge --no-edit -m "同步 xoqnapgf-dot/chop" FETCH_HEAD
-          if [ "$(git rev-parse HEAD)" = "$before" ]; then
-            echo "没有新内容"
+          upstream=$(git rev-parse FETCH_HEAD)
+
+          if [ "$before" = "$upstream" ]; then
+            echo "已经与上游一致，无需同步"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git push
+            git reset --hard FETCH_HEAD
+            # 恢复本仓库自己的同步工作流
+            mkdir -p .github/workflows
+            cp /tmp/sync-upstream.yml.bak .github/workflows/sync-upstream.yml
+            git add .github/workflows/sync-upstream.yml
+            git commit --allow-empty -m "同步 xoqnapgf-dot/chop（保留本地同步工作流）" || true
+            git push --force
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-      # 用 GITHUB_TOKEN 推送不会自动触发其他工作流，所以这里手动触发一次部署
       - name: 触发部署
         if: steps.merge.outputs.changed == 'true'
         env:
